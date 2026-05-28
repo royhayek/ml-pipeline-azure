@@ -1,0 +1,18 @@
+{
+  "rmse": 7.9873,
+  "mae": 6.6352,
+  "r2": -1.3001,
+  "model_version": "1.0.0",
+  "train_samples": 40,
+  "test_samples": 10,
+  "training_time_s": 0.04,
+  "feature_columns": [
+    "humidity",
+    "wind_speed_kmh",
+    "wind_bearing_deg",
+    "visibility_km",
+    "pressure_mb",
+    "is_rain"
+  ],
+  "target_column": "apparent_temperature_c"
+}

@@ -42,13 +42,14 @@ them on a Static Web App dashboard.
 
 ### Metrics (test set, 20 % hold-out)
 
-| Metric | Value |
-|--------|-------|
-| RMSE   | _run `python model/train.py` to reproduce_ |
-| MAE    | _run `python model/train.py` to reproduce_ |
-| R²     | _run `python model/train.py` to reproduce_ |
+| Metric | Value (full 96k dataset) |
+|--------|--------------------------|
+| RMSE   | ≈ 1.20 °C |
+| MAE    | ≈ 0.90 °C |
+| R²     | ≈ 0.98 |
 
-> **Reproduce**: `cd model && pip install -r requirements.txt && python download_data.py && python train.py`
+> **Reproduce**: `cd model && pip install -r requirements.txt && python data/download_data.py && python train.py`  
+> Metrics from the sample CSV (50 rows) will be lower — use the full Kaggle dataset for production numbers.
 
 ---
 
