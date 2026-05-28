@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+venv/
+.venv/
+env/
+.env
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Azure Functions
+local.settings.json
+bin/
+obj/
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Secrets & credentials
+*.pem
+*.key
+*.cert
+service_principal.json
+azure_credentials.json
+
+# Large data files (full dataset downloaded via Kaggle CLI – not committed)
+model/data/weather_full.csv
+model/data/weatherHistory.csv
+*.csv.gz
+*.parquet
+
+# Trained model binaries – small versioned models ARE committed
+# model_v*.pkl files are kept in the repo (< 5 MB for scikit-learn)
+
+# Test outputs
+tests/output/
