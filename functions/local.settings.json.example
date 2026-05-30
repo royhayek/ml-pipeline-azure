@@ -1,0 +1,16 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "<your-storage-connection-string>",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "STORAGE_CONNECTION_STRING": "<your-storage-connection-string>",
+    "QUEUE_NAME": "ml-inference-queue",
+    "ML_API_URL": "https://<your-container-app>.azurecontainerapps.io",
+    "COSMOS_CONNECTION_STRING": "<your-cosmos-connection-string>",
+    "COSMOS_DATABASE": "mlpipeline",
+    "COSMOS_CONTAINER": "inferences",
+    "APPINSIGHTS_INSTRUMENTATIONKEY": "<your-instrumentation-key>",
+    "MAX_BLOB_SIZE_MB": "10",
+    "ALLOWED_EXTENSIONS": "csv"
+  }
+}
