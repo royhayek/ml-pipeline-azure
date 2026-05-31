@@ -4,12 +4,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 VALID_RECORD = {
+    "temperature_c": 18.5,
     "humidity": 0.72,
     "wind_speed_kmh": 14.3,
     "wind_bearing_deg": 180.0,
     "visibility_km": 9.5,
     "pressure_mb": 1012.4,
     "is_rain": 0,
+    "hour": 14,
+    "month": 6,
 }
 
 
@@ -84,7 +87,7 @@ def test_predict_empty_body(api_client):
 
 
 def test_predict_missing_field(api_client):
-    incomplete = {k: v for k, v in VALID_RECORD.items() if k != "pressure_mb"}
+    incomplete = {k: v for k, v in VALID_RECORD.items() if k != "temperature_c"}
     resp = api_client.post("/predict", json={"records": [incomplete]})
     assert resp.status_code == 422
 

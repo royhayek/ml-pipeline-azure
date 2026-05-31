@@ -1,18 +1,25 @@
 {
-  "rmse": 5.5889,
-  "mae": 4.3597,
-  "r2": 0.727,
+  "rmse": 0.0867,
+  "mae": 0.0551,
+  "r2": 0.9999,
   "model_version": "1.0.0",
   "train_samples": 76132,
   "test_samples": 19033,
-  "training_time_s": 16.6,
+  "training_time_s": 51.16,
+  "n_estimators": 454,
   "feature_columns": [
+    "temperature_c",
     "humidity",
     "wind_speed_kmh",
-    "wind_bearing_deg",
+    "wind_bearing_sin",
+    "wind_bearing_cos",
     "visibility_km",
     "pressure_mb",
-    "is_rain"
+    "is_rain",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos"
   ],
   "target_column": "apparent_temperature_c"
 }

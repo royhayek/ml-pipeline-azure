@@ -101,23 +101,20 @@ def _upsert_inference(doc: dict) -> None:
 # ---------------------------------------------------------------------------
 # CSV → predict request conversion
 # ---------------------------------------------------------------------------
-FEATURE_COLS = [
-    "humidity", "wind_speed_kmh", "wind_bearing_deg",
-    "visibility_km", "pressure_mb", "is_rain",
-]
-
-
 def _csv_to_records(csv_bytes: bytes) -> list[dict]:
     reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8")))
     records = []
     for row in reader:
         records.append({
+            "temperature_c": float(row["temperature_c"]),
             "humidity": float(row["humidity"]),
             "wind_speed_kmh": float(row["wind_speed_kmh"]),
             "wind_bearing_deg": float(row["wind_bearing_deg"]),
             "visibility_km": float(row["visibility_km"]),
             "pressure_mb": float(row["pressure_mb"]),
             "is_rain": int(row["is_rain"]),
+            "hour": int(row["hour"]),
+            "month": int(row["month"]),
         })
     return records
 

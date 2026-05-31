@@ -73,13 +73,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+import math
+
 FEATURE_ORDER = [
+    "temperature_c",
     "humidity",
     "wind_speed_kmh",
-    "wind_bearing_deg",
+    "wind_bearing_sin",
+    "wind_bearing_cos",
     "visibility_km",
     "pressure_mb",
     "is_rain",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
 ]
 
 
@@ -87,12 +95,15 @@ FEATURE_ORDER = [
 # Schemas
 # ---------------------------------------------------------------------------
 class WeatherRecord(BaseModel):
+    temperature_c: float = Field(..., ge=-60.0, le=60.0, description="Actual air temperature in °C")
     humidity: float = Field(..., ge=0.0, le=1.0, description="Relative humidity [0-1]")
     wind_speed_kmh: float = Field(..., ge=0.0, description="Wind speed in km/h")
     wind_bearing_deg: float = Field(..., ge=0.0, le=360.0, description="Wind bearing in degrees")
     visibility_km: float = Field(..., ge=0.0, description="Visibility in km")
     pressure_mb: float = Field(..., ge=900.0, le=1100.0, description="Sea-level pressure in mbar")
     is_rain: int = Field(..., ge=0, le=1, description="1 if precipitation type is rain, else 0")
+    hour: int = Field(..., ge=0, le=23, description="Hour of day (0-23)")
+    month: int = Field(..., ge=1, le=12, description="Month of year (1-12)")
 
     @field_validator("humidity")
     @classmethod
@@ -155,7 +166,22 @@ def predict(body: PredictRequest, request: Request):
 
     t0 = time.monotonic()
     try:
-        X = np.array([[getattr(r, col) for col in FEATURE_ORDER] for r in body.records])
+        def _to_row(r: WeatherRecord) -> list:
+            return [
+                r.temperature_c,
+                r.humidity,
+                r.wind_speed_kmh,
+                math.sin(math.radians(r.wind_bearing_deg)),
+                math.cos(math.radians(r.wind_bearing_deg)),
+                r.visibility_km,
+                r.pressure_mb,
+                r.is_rain,
+                math.sin(2 * math.pi * r.hour / 24),
+                math.cos(2 * math.pi * r.hour / 24),
+                math.sin(2 * math.pi * r.month / 12),
+                math.cos(2 * math.pi * r.month / 12),
+            ]
+        X = np.array([_to_row(r) for r in body.records])
         preds = _model.predict(X).tolist()
         latency = round((time.monotonic() - t0) * 1000, 2)
         _record(latency)

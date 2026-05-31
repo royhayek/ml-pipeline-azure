@@ -35,18 +35,18 @@ them on a Static Web App dashboard.
 | Source          | `kaggle datasets download -d budincsevity/szeged-weather` |
 | Size            | ~10 MB, ~96 k hourly records |
 | Task            | Regression — predict **apparent temperature (°C)** |
-| Features        | `humidity`, `wind_speed_kmh`, `wind_bearing_deg`, `visibility_km`, `pressure_mb`, `is_rain` |
+| Features        | `temperature_c`, `humidity`, `wind_speed_kmh`, `wind_bearing_deg` (sin/cos), `visibility_km`, `pressure_mb`, `is_rain`, `hour` (sin/cos), `month` (sin/cos) |
 | Model           | Gradient Boosting Regressor (scikit-learn) |
 | Export format   | `model_v1.0.0.pkl` (joblib) |
 | Random seed     | `42` |
 
 ### Metrics (test set, 20 % hold-out)
 
-| Metric | Value (95 165-row test set, 20% hold-out) |
+| Metric | Value (19 033-row test set, 20% hold-out) |
 |--------|-------------------------------------------|
-| RMSE   | 5.59 °C |
-| MAE    | 4.36 °C |
-| R²     | 0.727 |
+| RMSE   | 0.087 °C |
+| MAE    | 0.055 °C |
+| R²     | 0.9999 |
 
 > **Reproduce**: `cd model && pip install -r requirements.txt && python data/download_data.py && python train.py`
 
@@ -88,8 +88,9 @@ curl http://localhost:8000/health
 curl http://localhost:8000/version
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
-  -d '{"records":[{"humidity":0.72,"wind_speed_kmh":14.3,"wind_bearing_deg":180,
-       "visibility_km":9.5,"pressure_mb":1012.4,"is_rain":0}]}'
+  -d '{"records":[{"temperature_c":18.5,"humidity":0.72,"wind_speed_kmh":14.3,
+       "wind_bearing_deg":180,"visibility_km":9.5,"pressure_mb":1012.4,
+       "is_rain":0,"hour":14,"month":6}]}'
 ```
 
 ---
@@ -119,12 +120,15 @@ Key GitHub Secrets required before running the CD workflow:
 {
   "records": [
     {
+      "temperature_c": 18.5,
       "humidity": 0.72,
       "wind_speed_kmh": 14.3,
       "wind_bearing_deg": 180,
       "visibility_km": 9.5,
       "pressure_mb": 1012.4,
-      "is_rain": 0
+      "is_rain": 0,
+      "hour": 14,
+      "month": 6
     }
   ]
 }

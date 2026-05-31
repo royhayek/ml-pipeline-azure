@@ -24,12 +24,15 @@ from azure.storage.queue import QueueClient, BinaryBase64EncodePolicy
 logger = logging.getLogger(__name__)
 
 REQUIRED_CSV_COLUMNS = {
+    "temperature_c",
     "humidity",
     "wind_speed_kmh",
     "wind_bearing_deg",
     "visibility_km",
     "pressure_mb",
     "is_rain",
+    "hour",
+    "month",
 }
 
 STORAGE_CONN = os.environ["STORAGE_CONNECTION_STRING"]
