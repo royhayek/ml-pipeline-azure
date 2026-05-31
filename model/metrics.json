@@ -1,11 +1,11 @@
 {
-  "rmse": 7.9873,
-  "mae": 6.6352,
-  "r2": -1.3001,
+  "rmse": 5.5889,
+  "mae": 4.3597,
+  "r2": 0.727,
   "model_version": "1.0.0",
-  "train_samples": 40,
-  "test_samples": 10,
-  "training_time_s": 0.04,
+  "train_samples": 76132,
+  "test_samples": 19033,
+  "training_time_s": 16.6,
   "feature_columns": [
     "humidity",
     "wind_speed_kmh",
