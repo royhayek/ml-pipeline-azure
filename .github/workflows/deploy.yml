@@ -1,0 +1,137 @@
+name: CD — Build, Push & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, prod]
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+  IMAGE_NAME: mlapi
+  RESOURCE_GROUP_STAGING: rg-mlpipeline-staging
+  RESOURCE_GROUP_PROD: rg-mlpipeline-prod
+
+jobs:
+  # ── Build & push image ────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & push to ACR
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set image tag
+        id: meta
+        run: |
+          TAG="${{ github.sha }}"
+          echo "image_tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        run: |
+          docker build \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest \
+            -f api/Dockerfile \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+  # ── Deploy to staging ─────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update Container App (staging)
+        run: |
+          az containerapp update \
+            --name ca-mlapi-staging \
+            --resource-group ${{ env.RESOURCE_GROUP_STAGING }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+
+      - name: Deploy Functions (staging)
+        run: |
+          cd functions
+          pip install azure-functions-core-tools --pre -q
+          func azure functionapp publish func-dispatcher-staging --python
+          func azure functionapp publish func-worker-staging --python
+
+      - name: Smoke test staging
+        run: |
+          STAGING_URL=$(az containerapp show \
+            --name ca-mlapi-staging \
+            --resource-group ${{ env.RESOURCE_GROUP_STAGING }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          curl -sf "https://${STAGING_URL}/health" | grep '"status":"ok"'
+
+  # ── Deploy to prod (requires manual approval) ─────────────────────────────
+  deploy-prod:
+    name: Deploy to production
+    needs: [build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: prod   # requires manual approval gate configured in GitHub
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update Container App (prod)
+        run: |
+          az containerapp update \
+            --name ca-mlapi-prod \
+            --resource-group ${{ env.RESOURCE_GROUP_PROD }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+
+      - name: Deploy Functions (prod)
+        run: |
+          cd functions
+          pip install azure-functions-core-tools --pre -q
+          func azure functionapp publish func-dispatcher-prod --python
+          func azure functionapp publish func-worker-prod --python
+
+      - name: Smoke test production
+        run: |
+          PROD_URL=$(az containerapp show \
+            --name ca-mlapi-prod \
+            --resource-group ${{ env.RESOURCE_GROUP_PROD }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          curl -sf "https://${PROD_URL}/health" | grep '"status":"ok"'
