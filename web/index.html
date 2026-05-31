@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML Pipeline Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1f2e;
+      border-bottom: 1px solid #2d3748;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.25rem; font-weight: 600; color: #f7fafc; }
+    header span { font-size: 0.8rem; color: #68d391; background: #1c4532;
+      padding: 2px 8px; border-radius: 999px; }
+
+    main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .stat-card .label { font-size: 0.75rem; color: #a0aec0; text-transform: uppercase;
+      letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; color: #63b3ed;
+      margin-top: 0.25rem; }
+
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .chart-card {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .chart-card h2 { font-size: 0.9rem; color: #e2e8f0; margin-bottom: 1rem;
+      font-weight: 500; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.875rem;
+    }
+    thead { background: #2d3748; }
+    th { padding: 0.75rem 1rem; text-align: left; font-weight: 500;
+      color: #a0aec0; font-size: 0.75rem; text-transform: uppercase; }
+    td { padding: 0.75rem 1rem; border-top: 1px solid #2d3748; color: #e2e8f0; }
+    tr:hover td { background: #2d3748; }
+
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 0.7rem; font-weight: 600;
+    }
+    .badge-green { background: #1c4532; color: #68d391; }
+    .badge-blue  { background: #1a365d; color: #63b3ed; }
+
+    .refresh-btn {
+      background: #2b6cb0; color: white; border: none; padding: 0.5rem 1.25rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.875rem; margin-bottom: 1rem;
+    }
+    .refresh-btn:hover { background: #2c5282; }
+
+    #status { font-size: 0.8rem; color: #a0aec0; margin-bottom: 1rem; }
+
+    @media (max-width: 768px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ML Pipeline Dashboard</h1>
+    <span>live</span>
+  </header>
+
+  <main>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Total Inferences</div>
+        <div class="value" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Latency (ms)</div>
+        <div class="value" id="stat-latency">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Apparent Temp (°C)</div>
+        <div class="value" id="stat-temp">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Model Version</div>
+        <div class="value" id="stat-version" style="font-size:1.2rem">—</div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h2>Prediction Distribution (last 20)</h2>
+        <canvas id="histChart" height="180"></canvas>
+      </div>
+      <div class="chart-card">
+        <h2>Latency Over Time (ms)</h2>
+        <canvas id="latencyChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadData()">Refresh</button>
+    <div id="status">Loading...</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Timestamp</th>
+          <th>Records</th>
+          <th>Avg Predicted Temp</th>
+          <th>Latency (ms)</th>
+          <th>Model</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr><td colspan="6" style="text-align:center;color:#a0aec0">Loading…</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script>
+    const API_URL = "/api/recent";
+
+    let histChart, latencyChart;
+
+    function initCharts() {
+      const chartDefaults = {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#a0aec0" }, grid: { color: "#2d3748" } },
+          y: { ticks: { color: "#a0aec0" }, grid: { color: "#2d3748" } },
+        },
+      };
+
+      histChart = new Chart(document.getElementById("histChart"), {
+        type: "bar",
+        data: { labels: [], datasets: [{ label: "Avg Predicted Temp (°C)",
+          data: [], backgroundColor: "#4299e1", borderRadius: 4 }] },
+        options: { ...chartDefaults },
+      });
+
+      latencyChart = new Chart(document.getElementById("latencyChart"), {
+        type: "line",
+        data: { labels: [], datasets: [{ label: "Latency (ms)",
+          data: [], borderColor: "#68d391", backgroundColor: "rgba(104,211,145,0.1)",
+          tension: 0.3, fill: true, pointRadius: 3 }] },
+        options: { ...chartDefaults },
+      });
+    }
+
+    async function loadData() {
+      document.getElementById("status").textContent = "Fetching data…";
+      try {
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { data } = await res.json();
+
+        if (!data || data.length === 0) {
+          document.getElementById("status").textContent = "No inferences yet.";
+          document.getElementById("table-body").innerHTML =
+            '<tr><td colspan="6" style="text-align:center;color:#a0aec0">No data</td></tr>';
+          return;
+        }
+
+        // Stats
+        const avgLatency = (data.reduce((s, r) => s + (r.latency_ms || 0), 0) / data.length).toFixed(1);
+        const avgTemp = (data.reduce((s, r) => s + (r.confidence_score || 0), 0) / data.length).toFixed(2);
+        document.getElementById("stat-total").textContent = data.length;
+        document.getElementById("stat-latency").textContent = avgLatency;
+        document.getElementById("stat-temp").textContent = avgTemp;
+        document.getElementById("stat-version").textContent = data[0].model_version || "—";
+
+        // Charts (most recent first → reverse for time order)
+        const ordered = [...data].reverse();
+        const labels = ordered.map(r => r.blob_name.split("/").pop().replace(".csv", ""));
+        histChart.data.labels = labels;
+        histChart.data.datasets[0].data = ordered.map(r => +(r.confidence_score || 0).toFixed(2));
+        histChart.update();
+
+        latencyChart.data.labels = labels;
+        latencyChart.data.datasets[0].data = ordered.map(r => r.latency_ms || 0);
+        latencyChart.update();
+
+        // Table
+        document.getElementById("table-body").innerHTML = data.map(r => `
+          <tr>
+            <td>${r.blob_name}</td>
+            <td>${new Date(r.timestamp).toLocaleString()}</td>
+            <td><span class="badge badge-blue">${r.record_count ?? "—"}</span></td>
+            <td>${r.confidence_score != null ? r.confidence_score.toFixed(2) + " °C" : "—"}</td>
+            <td>${r.latency_ms != null ? r.latency_ms.toFixed(1) : "—"}</td>
+            <td><span class="badge badge-green">${r.model_version || "—"}</span></td>
+          </tr>`).join("");
+
+        document.getElementById("status").textContent =
+          `Last updated: ${new Date().toLocaleTimeString()} — ${data.length} records`;
+      } catch (err) {
+        document.getElementById("status").textContent = `Error: ${err.message}`;
+      }
+    }
+
+    initCharts();
+    loadData();
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>
