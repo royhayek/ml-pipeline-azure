@@ -97,7 +97,17 @@ curl -X POST http://localhost:8000/predict \
 
 ## Azure deployment
 
-See [`docs/deployment.md`](docs/deployment.md) for step-by-step `az` commands.
+See [`docs/deployment.md`](docs/deployment.md) for full step-by-step `az` commands.
+
+Key GitHub Secrets required before running the CD workflow:
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CLIENT_ID` | Service principal client ID (OIDC) |
+| `AZURE_TENANT_ID` | Azure tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+| `ACR_LOGIN_SERVER` | e.g. `acrXXXXXX.azurecr.io` |
+| `ACR_NAME` | Registry name without domain |
 
 ---
 
