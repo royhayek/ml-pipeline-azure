@@ -48,13 +48,21 @@ export default function App() {
   const avgTemp    = n ? (data.reduce((s, r) => s + (r.confidence_score ?? 0), 0) / n).toFixed(2) : '—'
   const modelVer   = data[0]?.model_version ?? '—'
 
-  const ordered     = [...data].reverse()
-  const chartLabels = ordered.map(r => {
-    const s = r.blob_name.split('/').pop()?.replace('.csv', '') ?? r.blob_name
-    return s.length > 13 ? s.slice(0, 13) + '…' : s
-  })
-  const tempPoints    = ordered.map((r, i) => ({ label: chartLabels[i], value: r.confidence_score ?? 0 }))
-  const latencyPoints = ordered.map((r, i) => ({ label: chartLabels[i], value: r.latency_ms ?? 0 }))
+  const ordered = [...data].reverse()
+
+  // Use short timestamp as the X-axis label; include filename for tooltip
+  const tempPoints = ordered.map(r => ({
+    label:    new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    value:    r.confidence_score ?? 0,
+    file:     r.blob_name.split('/').pop()?.replace('.csv', '') ?? r.blob_name,
+    date:     new Date(r.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+  }))
+  const latencyPoints = ordered.map(r => ({
+    label:    new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    value:    r.latency_ms ?? 0,
+    file:     r.blob_name.split('/').pop()?.replace('.csv', '') ?? r.blob_name,
+    date:     new Date(r.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+  }))
 
   return (
     <div className="min-h-screen">
