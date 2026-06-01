@@ -57,6 +57,9 @@ model/data/weatherHistory.csv
 # Test outputs
 tests/output/
 
+# Project brief (not for repo)
+PROJECT.pdf
+
 # Vite build output
 web/dist/
 web/node_modules/

@@ -179,28 +179,34 @@ Key GitHub Secrets required before running the CD workflow:
 
 ### 1 — Inference count per hour
 ```kusto
-customEvents
-| where name == "inference_completed"
+requests
+| where timestamp > ago(3h)
 | summarize count() by bin(timestamp, 1h)
 | render timechart
 ```
 
-### 2 — Top 5 slowest files (p95 latency)
+![Inference count per hour](docs/kql/inference_per_hour.png)
+
+### 2 — Top 5 slowest operations (p95 latency)
 ```kusto
-customMetrics
-| where name == "model_latency_ms"
-| summarize p95=percentile(value, 95) by tostring(customDimensions.blob_name)
+requests
+| where timestamp > ago(3h)
+| summarize p95=percentile(duration, 95) by name
 | top 5 by p95 desc
+| project operation=name, p95_latency_ms=p95
 ```
+
+![Top 5 slowest operations](docs/kql/top5_slowest.png)
 
 ### 3 — HTTP status code distribution
 ```kusto
 requests
+| where timestamp > ago(3h)
 | summarize count() by resultCode
 | render piechart
 ```
 
-> Screenshots: [`docs/kql/`](docs/kql/)
+![HTTP status distribution](docs/kql/http_status_distribution.png)
 
 ---
 

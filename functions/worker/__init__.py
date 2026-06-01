@@ -30,9 +30,15 @@ from datetime import datetime, timezone
 import azure.functions as func
 import requests
 from azure.storage.blob import BlobServiceClient
-from azure.cosmos import CosmosClient, PartitionKey, exceptions as cosmos_exc
-from opencensus.ext.azure import metrics_exporter
-from opencensus.stats import aggregation, measure, stats, view
+from azure.cosmos import CosmosClient, exceptions as cosmos_exc
+
+# opencensus is optional — gracefully skip if not available on this runtime
+try:
+    from opencensus.ext.azure import metrics_exporter
+    from opencensus.stats import aggregation, measure, stats, view
+    _OPENCENSUS_AVAILABLE = True
+except ImportError:
+    _OPENCENSUS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -43,41 +49,46 @@ COSMOS_DB = os.environ.get("COSMOS_DATABASE", "mlpipeline")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "inferences")
 
 # ---------------------------------------------------------------------------
-# Custom Application Insights metrics
+# Custom Application Insights metrics (via opencensus when available)
 # ---------------------------------------------------------------------------
 _APPINSIGHTS_KEY = os.environ.get("APPINSIGHTS_INSTRUMENTATIONKEY", "")
+_stats_recorder = None
+m_inference_count = m_model_latency = m_api_error = None
 
-if _APPINSIGHTS_KEY:
-    _exporter = metrics_exporter.new_metrics_exporter(
-        connection_string=f"InstrumentationKey={_APPINSIGHTS_KEY}"
-    )
-    _stats = stats.Stats()
-    _view_manager = _stats.view_manager
-    _stats_recorder = _stats.stats_recorder
+if _APPINSIGHTS_KEY and _OPENCENSUS_AVAILABLE:
+    try:
+        _exporter = metrics_exporter.new_metrics_exporter(
+            connection_string=f"InstrumentationKey={_APPINSIGHTS_KEY}"
+        )
+        _stats_obj = stats.Stats()
+        _view_manager = _stats_obj.view_manager
+        _stats_recorder = _stats_obj.stats_recorder
 
-    m_inference_count = measure.MeasureInt("inference_count", "Number of inferences", "1")
-    m_model_latency = measure.MeasureFloat("model_latency_ms", "Model inference latency", "ms")
-    m_api_error = measure.MeasureInt("api_error", "ML API call errors", "1")
+        m_inference_count = measure.MeasureInt("inference_count", "Number of inferences", "1")
+        m_model_latency   = measure.MeasureFloat("model_latency_ms", "Model inference latency", "ms")
+        m_api_error       = measure.MeasureInt("api_error", "ML API call errors", "1")
 
-    inference_view = view.View("inference_count", "Total inferences",
-                               [], m_inference_count, aggregation.SumAggregation())
-    latency_view = view.View("model_latency_ms", "Model latency distribution",
-                             [], m_model_latency, aggregation.LastValueAggregation())
-    error_view = view.View("api_error", "API error count",
-                           [], m_api_error, aggregation.SumAggregation())
-
-    _view_manager.register_view(inference_view)
-    _view_manager.register_view(latency_view)
-    _view_manager.register_view(error_view)
-    _view_manager.register_exporter(_exporter)
+        for v in [
+            view.View("inference_count", "Total inferences", [], m_inference_count, aggregation.SumAggregation()),
+            view.View("model_latency_ms", "Model latency", [], m_model_latency, aggregation.LastValueAggregation()),
+            view.View("api_error", "API errors", [], m_api_error, aggregation.SumAggregation()),
+        ]:
+            _view_manager.register_view(v)
+        _view_manager.register_exporter(_exporter)
+    except Exception as e:
+        logger.warning("Application Insights metrics init failed: %s", e)
+        _stats_recorder = None
 
 
 def _record_metric(m, value):
-    if not _APPINSIGHTS_KEY:
+    if not _stats_recorder or m is None:
         return
-    mmap = _stats_recorder.new_measurement_map()
-    mmap.measure_put(m, value)
-    mmap.record()
+    try:
+        mmap = _stats_recorder.new_measurement_map()
+        mmap.measure_put(m, value)
+        mmap.record()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

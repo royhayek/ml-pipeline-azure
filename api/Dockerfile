@@ -1,9 +1,10 @@
-# ── Stage 1: build ─────────────────────────────────────────────────────────
+# Build context: project root  (docker build -f api/Dockerfile .)
+# ── Stage 1: build ──────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-COPY requirements.txt .
+COPY api/requirements.txt .
 RUN pip install --upgrade pip \
  && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
@@ -11,22 +12,16 @@ RUN pip install --upgrade pip \
 # ── Stage 2: runtime ────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-# Non-root user for security
 RUN useradd -m -u 1000 appuser
 
 WORKDIR /app
 
-# Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application code and model
-COPY main.py .
-COPY --chown=appuser:appuser . .
+COPY api/main.py .
+COPY model/model_v1.0.0.pkl /app/model_v1.0.0.pkl
 
-# Model is mounted via env var MODEL_PATH or baked in at /app/model_v1.0.0.pkl
-# The COPY below includes it when building locally; in Azure it's injected via
-# Container Apps environment variables pointing to Blob Storage.
-COPY ../model/model_v1.0.0.pkl /app/model_v1.0.0.pkl
+RUN chown -R appuser:appuser /app
 
 USER appuser
 
