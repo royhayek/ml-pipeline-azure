@@ -23,6 +23,11 @@ jobs:
   build-and-push:
     name: Build & push to ACR
     runs-on: ubuntu-latest
+    # Gate: only runs when DEPLOY_ENABLED repo variable is set to "true"
+    # (set this in Settings -> Secrets and variables -> Actions -> Variables
+    #  once AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME,
+    #  ACR_LOGIN_SERVER secrets are configured)
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
 
@@ -61,6 +66,7 @@ jobs:
     name: Deploy to staging
     needs: build-and-push
     runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: staging
 
     steps:
@@ -101,6 +107,7 @@ jobs:
     name: Deploy to production
     needs: [build-and-push, deploy-staging]
     runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: prod   # requires manual approval gate configured in GitHub
 
     steps:
