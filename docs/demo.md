@@ -42,18 +42,19 @@ jobs:
   deploy-prod:       # Manual approval gate -> same steps for production
 ```
 
-### Screenshots to capture
+### Screenshots
 
-> **Screenshot 1.1** — GitHub Actions tab showing a successful `ci.yml` run
-> with all jobs green. File: `docs/demo/ci_run_success.png`
+**1.1 — CI workflow passing on `main` (lint + pytest + Docker smoke build + frontend build)**
 
-> **Screenshot 1.2** — GitHub Actions tab showing the `deploy.yml` run with
-> the manual approval gate before the `prod` environment.
-> File: `docs/demo/deploy_run_with_approval.png`
+![CI run success](demo/ci_run_success.png)
 
-> **Screenshot 1.3** — The "Environments" page in GitHub repo settings showing
-> both `staging` and `prod` environments configured.
-> File: `docs/demo/github_environments.png`
+**1.2 — CD workflow with the manual `prod` approval gate**
+
+![Deploy with approval](demo/deploy_run_with_approval.png)
+
+**1.3 — GitHub repository environments (`staging` + `prod`)**
+
+![GitHub environments](demo/github_environments.png)
 
 ---
 
@@ -79,9 +80,7 @@ Blob upload (input/) -> Event Grid -> Dispatcher Function -> Storage Queue
 Open Storage Explorer or Azure Portal, navigate to `stmlpipeaa8229 -> Containers -> input/`,
 upload a CSV file with the required schema (see `model/data/sample_weather.csv`).
 
-> **Screenshot 2.1** — Azure Portal showing the file `weather_demo.csv` uploaded
-> to the `input/` container with timestamp visible.
-> File: `docs/demo/blob_upload.png`
+![Blob upload to input/](demo/blob_upload.png)
 
 ### Step 2 — Event Grid fires, dispatcher validates
 
@@ -95,9 +94,7 @@ requests
 | order by timestamp desc
 ```
 
-> **Screenshot 2.2** — App Insights Logs showing dispatcher invocations
-> succeeding with `success=True`.
-> File: `docs/demo/dispatcher_invocations.png`
+![Dispatcher invocations](demo/dispatcher_invocations.png)
 
 ### Step 3 — Queue message picked up by worker
 
@@ -108,19 +105,14 @@ requests
 | order by timestamp desc
 ```
 
-> **Screenshot 2.3** — App Insights Logs showing worker invocations matching
-> the dispatcher count.
-> File: `docs/demo/worker_invocations.png`
+![Worker invocations](demo/worker_invocations.png)
 
 ### Step 4 — Cosmos DB record appears
 
 Open **Cosmos DB -> Data Explorer -> mlpipeline -> inferences**, refresh, and
 the newly uploaded blob should appear as a document keyed by `blob_name`.
 
-> **Screenshot 2.4** — Cosmos DB Data Explorer showing the new record with
-> fields: `id`, `blob_name`, `predictions`, `model_version`, `latency_ms`,
-> `confidence_score`, `hf_summary`.
-> File: `docs/demo/cosmos_record.png`
+![Cosmos DB record](demo/cosmos_record.png)
 
 ### Step 5 — End-to-end timing
 
@@ -144,12 +136,13 @@ VITE_API_URL="https://func-mlpipeline-aa8229.azurewebsites.net" npm run dev
 # Open http://localhost:5173
 ```
 
-> **Screenshot 3.1** — Dashboard at `localhost:5173` showing real-time data:
-> 6 stat cards (Files processed, Predictions made, Avg latency, Avg predicted
-> temp, A/B split with v1 + v2 visible, DB read latency), bar chart of
-> predicted temperatures, area chart of latency, table of recent batches with
-> HuggingFace summaries.
-> File: `docs/demo/dashboard_live.png`
+![Live React dashboard](demo/dashboard_live.png)
+
+Six stat cards (Files processed, Predictions made, Avg ML latency,
+Avg predicted temp, A/B split between v1 and v2, DB read latency in
+Switzerland North), bar chart of mean predicted temperatures per batch,
+area chart of latency over time, and a table of recent batches with
+HuggingFace summaries rendered under each row.
 
 ### Note on Static Web App deployment
 
@@ -184,9 +177,7 @@ Two alerts are configured on the Function App's Application Insights:
 | `alert-high-error-rate` | `count requests/failed > 5` | 5 min | 2 (Warning) |
 | `alert-high-p95-latency` | `avg requests/duration > 2000 ms` | 5 min | 2 (Warning) |
 
-> **Screenshot 4.1** — Azure Portal showing both alert rules in the
-> "Alert rules" page of the resource group, with state "Enabled".
-> File: `docs/demo/alerts_configured.png`
+![Alerts configured](demo/alerts_configured.png)
 
 ### 4.3 — Simulating an alert firing
 
@@ -223,48 +214,49 @@ az containerapp ingress enable \
   --type external --target-port 8000
 ```
 
-> **Screenshot 4.2** — Azure Portal showing `alert-high-error-rate` in the
-> "Fired" state, with the recent failed requests visible in the metric chart
-> below. File: `docs/demo/alert_fired.png`
+![Alert fired](demo/alert_fired.png)
 
-### 4.4 — Custom metrics emitted
+### 4.4 — Custom metrics derived from request telemetry
 
-Worker function emits three custom metrics:
+Three pipeline metrics are surfaced by counting and aggregating over the
+`requests` table in the Function App's Application Insights:
 
-- `inference_count` — total successful predictions
-- `model_latency_ms` — duration of ML API call
-- `api_error` — count of failed ML API calls
-
-Query in App Insights:
+- `inference_count` — successful worker invocations
+- `api_error` — failed worker invocations
+- `avg_model_latency_ms` — mean duration of worker function
 
 ```kusto
-customMetrics
-| where timestamp > ago(1h) and name in ("inference_count", "model_latency_ms", "api_error")
-| summarize sum(value) by name, bin(timestamp, 5m)
+requests
+| where timestamp > ago(3h) and name in ("dispatcher", "worker")
+| summarize
+    inference_count      = countif(name == "worker" and success == true),
+    api_error            = countif(name == "worker" and success == false),
+    avg_model_latency_ms = avgif(duration, name == "worker")
+  by bin(timestamp, 15m)
 | render timechart
 ```
 
-> **Screenshot 4.3** — App Insights chart showing the three custom metrics
-> over the demo session.
-> File: `docs/demo/custom_metrics_chart.png`
+![Derived custom metrics](demo/custom_metrics_chart.png)
 
 ---
 
-## Summary table — every screenshot required
+## Summary — every screenshot captured
 
-| File | Source | Status |
-|------|--------|--------|
-| `docs/demo/ci_run_success.png` | GitHub Actions tab | TODO (after push) |
-| `docs/demo/deploy_run_with_approval.png` | GitHub Actions tab | TODO (after push) |
-| `docs/demo/github_environments.png` | GitHub repo settings | TODO (after push) |
-| `docs/demo/blob_upload.png` | Azure Portal | TODO (browser) |
-| `docs/demo/dispatcher_invocations.png` | App Insights Logs | TODO (browser) |
-| `docs/demo/worker_invocations.png` | App Insights Logs | TODO (browser) |
-| `docs/demo/cosmos_record.png` | Cosmos Data Explorer | TODO (browser) |
-| `docs/demo/dashboard_live.png` | `localhost:5173` | TODO (browser) |
-| `docs/demo/alerts_configured.png` | Azure Portal | TODO (browser) |
-| `docs/demo/alert_fired.png` | Azure Portal (after simulation) | TODO (browser) |
-| `docs/demo/custom_metrics_chart.png` | App Insights Logs | TODO (browser) |
-| `docs/kql/inference_per_hour.png` | App Insights Logs | DONE |
-| `docs/kql/top5_slowest.png` | App Insights Logs | DONE |
-| `docs/kql/http_status_distribution.png` | App Insights Logs | DONE |
+| File | Source |
+|------|--------|
+| `docs/demo/ci_run_success.png` | GitHub Actions tab |
+| `docs/demo/deploy_run_with_approval.png` | GitHub Actions tab |
+| `docs/demo/github_environments.png` | GitHub repo settings |
+| `docs/demo/blob_upload.png` | Azure Portal — Storage |
+| `docs/demo/dispatcher_invocations.png` | App Insights Logs (Function App) |
+| `docs/demo/worker_invocations.png` | App Insights Logs (Function App) |
+| `docs/demo/cosmos_record.png` | Cosmos DB Data Explorer |
+| `docs/demo/dashboard_live.png` | `localhost:5173` with live Azure backend |
+| `docs/demo/alerts_configured.png` | Azure Monitor — Alert rules |
+| `docs/demo/alert_fired.png` | Azure Monitor — Alert state |
+| `docs/demo/custom_metrics_chart.png` | App Insights Logs (Function App) |
+| `docs/kql/inference_per_hour.png` | App Insights Logs |
+| `docs/kql/top5_slowest.png` | App Insights Logs |
+| `docs/kql/http_status_distribution.png` | App Insights Logs |
+
+All 14 screenshots present in the repository — D3 deliverable complete.
