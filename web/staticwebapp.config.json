@@ -1,16 +1,14 @@
 {
   "routes": [
-    {
-      "route": "/api/*",
-      "allowedRoles": ["anonymous"]
-    }
+    { "route": "/api/*", "allowedRoles": ["anonymous"] },
+    { "route": "/*",     "serve": "/index.html", "statusCode": 200 }
   ],
-  "navigationFallback": {
-    "rewrite": "/index.html"
-  },
   "globalHeaders": {
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "SAMEORIGIN",
-    "Referrer-Policy": "strict-origin-when-cross-origin"
+    "X-Frame-Options":        "SAMEORIGIN",
+    "Referrer-Policy":        "strict-origin-when-cross-origin"
+  },
+  "platform": {
+    "apiRuntime": "node:18"
   }
 }

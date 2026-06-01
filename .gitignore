@@ -56,3 +56,7 @@ model/data/weatherHistory.csv
 
 # Test outputs
 tests/output/
+
+# Vite build output
+web/dist/
+web/node_modules/
