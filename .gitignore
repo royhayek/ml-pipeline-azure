@@ -63,3 +63,6 @@ PROJECT.pdf
 # Vite build output
 web/dist/
 web/node_modules/
+
+# Large model artifacts (regenerated via train_v2.py — see README)
+model/model_v2.0.0.pkl

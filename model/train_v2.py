@@ -4,12 +4,19 @@ Train model v2.0.0 - RandomForestRegressor for A/B testing against v1 (GBR).
 v1: GradientBoostingRegressor  - RMSE 0.087 C, R2 0.9999, ~454 trees
 v2: RandomForestRegressor       - Different algorithm, compare latency + accuracy in KQL
 
-Usage:
-    python train_v2.py
+NOTE on the .pkl file:
+The trained RandomForest serialises to ~243 MB which exceeds GitHub's 100 MB
+file limit, so model_v2.0.0.pkl is git-ignored. Regenerate it locally by
+running this script after downloading the Kaggle dataset:
+
+    cd model && python data/download_data.py && python train_v2.py
+
+The resulting model_v2.0.0.pkl is then baked into the v2 Docker image via
+api/Dockerfile.v2 when building for Container Apps.
 
 Outputs:
-    model_v2.0.0.pkl  - versioned v2 model artifact (joblib)
-    metrics_v2.json   - metrics for comparison with v1
+    model_v2.0.0.pkl  - versioned v2 model artifact (joblib, gitignored)
+    metrics_v2.json   - metrics for comparison with v1 (committed)
 """
 
 import json
