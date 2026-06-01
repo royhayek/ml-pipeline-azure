@@ -1,10 +1,11 @@
 """
-HTTP API Function — GET /api/recent
+HTTP API Function - GET /api/recent
 
 Returns the 20 most recent inference records from Cosmos DB.
 Used by the Static Web App dashboard.
 
 Rate-limited to 60 requests/minute per client IP (in-memory, best-effort).
+Includes read latency measurement to demonstrate multi-region Cosmos DB benefit.
 
 Environment variables:
     COSMOS_CONNECTION_STRING
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 COSMOS_CONN = os.environ["COSMOS_CONNECTION_STRING"]
 COSMOS_DB = os.environ.get("COSMOS_DATABASE", "mlpipeline")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "inferences")
+COSMOS_REGION = os.environ.get("COSMOS_PREFERRED_REGION", "Switzerland North")
 RATE_LIMIT = 60  # requests per minute per IP
 
 # In-memory rate limiter: {ip: [timestamps]}
@@ -62,19 +64,33 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
-        cosmos = CosmosClient.from_connection_string(COSMOS_CONN)
+        t0 = time.monotonic()
+        cosmos = CosmosClient.from_connection_string(
+            COSMOS_CONN,
+            preferred_locations=[COSMOS_REGION],
+        )
         container = cosmos.get_database_client(COSMOS_DB).get_container_client(COSMOS_CONTAINER)
 
         query = """
             SELECT TOP 20
                 c.id, c.blob_name, c.timestamp, c.model_version,
-                c.record_count, c.latency_ms, c.confidence_score
+                c.record_count, c.latency_ms, c.confidence_score,
+                c.hf_summary
             FROM c
             ORDER BY c.timestamp DESC
         """
         items = list(container.query_items(query=query, enable_cross_partition_query=True))
+        read_latency_ms = round((time.monotonic() - t0) * 1000, 1)
+
         return func.HttpResponse(
-            json.dumps({"data": items, "count": len(items)}),
+            json.dumps({
+                "data": items,
+                "count": len(items),
+                "meta": {
+                    "read_region": COSMOS_REGION,
+                    "read_latency_ms": read_latency_ms,
+                },
+            }),
             status_code=200,
             headers=CORS_HEADERS,
         )
