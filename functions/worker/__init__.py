@@ -48,7 +48,7 @@ COSMOS_CONN = os.environ["COSMOS_CONNECTION_STRING"]
 COSMOS_DB = os.environ.get("COSMOS_DATABASE", "mlpipeline")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "inferences")
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
-HF_MODEL = "google/flan-t5-base"
+HF_MODEL = os.environ.get("HF_MODEL", "facebook/bart-large-cnn")
 # APIM subscription key - set when routing through API Management
 APIM_KEY = os.environ.get("APIM_SUBSCRIPTION_KEY", "")
 
@@ -132,22 +132,27 @@ def _get_hf_summary(predictions: list, records: list) -> str:
         rain_pct = round(100 * sum(r["is_rain"] for r in records) / len(records))
 
         prompt = (
-            f"Summarize in one sentence: {len(predictions)} weather readings predict "
-            f"apparent temperature of {avg_temp}C. "
-            f"Humidity {avg_humidity}, wind {avg_wind}km/h, {rain_pct}% chance of rain."
+            f"The weather analysis covered {len(predictions)} readings showing an "
+            f"average apparent temperature of {avg_temp} degrees Celsius. "
+            f"Conditions included humidity of {avg_humidity}, wind speed averaging "
+            f"{avg_wind} km/h, and a {rain_pct}% rain occurrence rate across the batch. "
+            f"This indicates the predicted weather profile for the analyzed period."
         )
 
         resp = requests.post(
-            f"https://api-inference.huggingface.co/models/{HF_MODEL}",
+            f"https://router.huggingface.co/hf-inference/models/{HF_MODEL}",
             headers={"Authorization": f"Bearer {HF_API_TOKEN}"},
-            json={"inputs": prompt, "parameters": {"max_new_tokens": 60}},
-            timeout=15,
+            json={"inputs": prompt, "parameters": {"max_length": 60, "min_length": 20}},
+            timeout=20,
         )
         if resp.status_code == 200:
             result = resp.json()
             if isinstance(result, list) and result:
-                text = result[0].get("generated_text", "").strip()
+                text = (result[0].get("summary_text")
+                        or result[0].get("generated_text", "")).strip()
                 return text[:300]
+        else:
+            logger.warning("HF returned %d: %s", resp.status_code, resp.text[:200])
     except Exception as exc:
         logger.warning("HuggingFace summary failed (non-blocking): %s", exc)
     return ""
