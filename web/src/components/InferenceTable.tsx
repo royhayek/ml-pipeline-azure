@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 import type { InferenceRecord } from "../types";
 
 interface InferenceTableProps {
@@ -19,14 +19,19 @@ function fmtTs(ts: string): string {
 function SkeletonRow() {
   return (
     <tr className="border-b border-white/[0.04]">
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 7 }).map((_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-3 rounded bg-white/[0.05] animate-pulse" style={{ width: `${50 + i * 10}%` }} />
+          <div
+            className="h-3 rounded bg-white/[0.05] animate-pulse"
+            style={{ width: `${50 + i * 10}%` }}
+          />
         </td>
       ))}
     </tr>
   );
 }
+
+const COLS = ["#", "File", "Timestamp", "Records", "Avg Predicted Temp", "Latency", "Model"];
 
 export default function InferenceTable({ rows, isFetching, onRefresh }: InferenceTableProps) {
   return (
@@ -34,8 +39,10 @@ export default function InferenceTable({ rows, isFetching, onRefresh }: Inferenc
       {/* Table header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
         <div>
-          <h2 className="text-sm font-semibold text-white">Recent inferences</h2>
-          <p className="text-[11px] text-zinc-600 mt-0.5">Last {rows.length} records · auto-refreshes every 30 s</p>
+          <h2 className="text-sm font-semibold text-white">Recent batches</h2>
+          <p className="text-[11px] text-zinc-600 mt-0.5">
+            Last {rows.length} CSV files · auto-refreshes every 30 s
+          </p>
         </div>
         <button
           onClick={onRefresh}
@@ -55,7 +62,7 @@ export default function InferenceTable({ rows, isFetching, onRefresh }: Inferenc
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-white/[0.06]">
-              {["#", "File", "Timestamp", "Records", "Avg Temp", "Latency", "Model", "AI Summary"].map((h) => (
+              {COLS.map((h) => (
                 <th
                   key={h}
                   className="px-4 py-3 text-left text-[10px] font-semibold tracking-widest
@@ -71,47 +78,77 @@ export default function InferenceTable({ rows, isFetching, onRefresh }: Inferenc
               Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-16 text-center text-zinc-600 text-xs">
-                  No inferences yet — upload a CSV to the{" "}
-                  <code className="font-mono bg-white/[0.05] px-1 rounded">input/</code> container to begin.
+                <td colSpan={COLS.length} className="px-4 py-16 text-center text-zinc-600 text-xs">
+                  No inferences yet - upload a CSV to the{" "}
+                  <code className="font-mono bg-white/[0.05] px-1 rounded">input/</code> container
+                  to begin.
                 </td>
               </tr>
             ) : (
-              rows.map((r, i) => (
-                <tr
-                  key={r.id}
-                  className="border-b border-white/[0.03] hover:bg-white/[0.02]
-                               transition-colors duration-100"
-                  style={{ animationDelay: `${i * 20}ms` }}
-                >
-                  <td className="px-4 py-3 font-mono text-zinc-700">{String(i + 1).padStart(2, "0")}</td>
-                  <td className="px-4 py-3 text-white font-medium max-w-[240px]">
-                    <span className="block truncate" title={r.blob_name}>
-                      {r.blob_name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 font-mono whitespace-nowrap">{fmtTs(r.timestamp)}</td>
-                  <td className="px-4 py-3">
-                    <span className="badge badge-amber">{r.record_count ?? "—"}</span>
-                  </td>
-                  <td className="px-4 py-3 text-violet-400 font-mono">
-                    {r.confidence_score != null ? `${r.confidence_score.toFixed(2)} °C` : "—"}
-                  </td>
-                  <td
-                    className={`px-4 py-3 font-mono ${(r.latency_ms ?? 0) > 2000 ? "text-amber-400" : "text-zinc-400"}`}
+              rows.flatMap((r, i) => {
+                const baseRow = (
+                  <tr
+                    key={`${r.id}-row`}
+                    className={`hover:bg-white/[0.02] transition-colors duration-100
+                                ${!r.hf_summary ? "border-b border-white/[0.03]" : ""}`}
+                    style={{ animationDelay: `${i * 20}ms` }}
                   >
-                    {r.latency_ms != null ? `${r.latency_ms.toFixed(0)} ms` : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="badge badge-violet">{r.model_version}</span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500 max-w-[260px]">
-                    {r.hf_summary
-                      ? <span className="block truncate italic text-[11px]" title={r.hf_summary}>{r.hf_summary}</span>
-                      : <span className="text-zinc-700">—</span>}
-                  </td>
-                </tr>
-              ))
+                    <td className="px-4 py-3 font-mono text-zinc-700 align-top">
+                      {String(i + 1).padStart(2, "0")}
+                    </td>
+                    <td className="px-4 py-3 text-white font-medium max-w-[260px] align-top">
+                      <span className="block truncate" title={r.blob_name}>
+                        {r.blob_name}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-500 font-mono whitespace-nowrap align-top">
+                      {fmtTs(r.timestamp)}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <span className="badge badge-amber">{r.record_count ?? "—"}</span>
+                    </td>
+                    <td className="px-4 py-3 text-violet-400 font-mono align-top">
+                      {r.confidence_score != null
+                        ? `${r.confidence_score.toFixed(2)} °C`
+                        : "—"}
+                    </td>
+                    <td
+                      className={`px-4 py-3 font-mono align-top ${
+                        (r.latency_ms ?? 0) > 2000 ? "text-amber-400" : "text-zinc-400"
+                      }`}
+                    >
+                      {r.latency_ms != null ? `${r.latency_ms.toFixed(0)} ms` : "—"}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <span
+                        className={`badge ${
+                          r.model_version?.startsWith("2") ? "badge-teal" : "badge-violet"
+                        }`}
+                      >
+                        v{r.model_version}
+                      </span>
+                    </td>
+                  </tr>
+                );
+
+                if (!r.hf_summary) return [baseRow];
+
+                const summaryRow = (
+                  <tr
+                    key={`${r.id}-summary`}
+                    className="border-b border-white/[0.03] bg-white/[0.015]"
+                  >
+                    <td colSpan={COLS.length} className="px-4 pt-1 pb-3">
+                      <div className="flex items-start gap-2 text-[11.5px] text-zinc-400 leading-relaxed">
+                        <Sparkles className="w-3 h-3 mt-0.5 text-teal-400/70 shrink-0" />
+                        <span className="italic">{r.hf_summary}</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+
+                return [baseRow, summaryRow];
+              })
             )}
           </tbody>
         </table>
