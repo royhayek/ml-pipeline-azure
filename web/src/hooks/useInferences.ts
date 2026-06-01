@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { InferenceRecord, FetchStatus } from "../types";
+import type { InferenceRecord, ApiMeta, FetchStatus } from "../types";
 
 const API_URL = "/api/recent";
 const POLL_INTERVAL = 30_000;
 
 interface UseInferencesReturn {
   data: InferenceRecord[];
+  meta: ApiMeta | null;
   status: FetchStatus;
   error: string | null;
   lastSync: Date | null;
@@ -15,6 +16,7 @@ interface UseInferencesReturn {
 
 export function useInferences(): UseInferencesReturn {
   const [data, setData] = useState<InferenceRecord[]>([]);
+  const [meta, setMeta] = useState<ApiMeta | null>(null);
   const [status, setStatus] = useState<FetchStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
@@ -31,8 +33,9 @@ export function useInferences(): UseInferencesReturn {
     try {
       const res = await fetch(API_URL, { signal: abortRef.current.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { data: InferenceRecord[] };
+      const json = await res.json();
       setData(json.data ?? []);
+      setMeta(json.meta ?? null);
       setLastSync(new Date());
       setStatus("success");
       setError(null);
@@ -55,5 +58,5 @@ export function useInferences(): UseInferencesReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { data, status, error, lastSync, isFetching, refresh: fetch_ };
+  return { data, meta, status, error, lastSync, isFetching, refresh: fetch_ };
 }

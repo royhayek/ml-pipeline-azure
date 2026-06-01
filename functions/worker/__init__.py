@@ -47,6 +47,8 @@ ML_API_URL = os.environ["ML_API_URL"].rstrip("/")
 COSMOS_CONN = os.environ["COSMOS_CONNECTION_STRING"]
 COSMOS_DB = os.environ.get("COSMOS_DATABASE", "mlpipeline")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "inferences")
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
+HF_MODEL = "google/flan-t5-base"
 
 # ---------------------------------------------------------------------------
 # Custom Application Insights metrics (via opencensus when available)
@@ -110,7 +112,42 @@ def _upsert_inference(doc: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSV → predict request conversion
+# HuggingFace Inference API - natural language summary (+0.5 bonus)
+# ---------------------------------------------------------------------------
+def _get_hf_summary(predictions: list, records: list) -> str:
+    """Call HuggingFace Inference API to produce a one-sentence weather summary."""
+    if not HF_API_TOKEN or not predictions:
+        return ""
+    try:
+        avg_temp = round(sum(predictions) / len(predictions), 1)
+        avg_humidity = round(sum(r["humidity"] for r in records) / len(records), 2)
+        avg_wind = round(sum(r["wind_speed_kmh"] for r in records) / len(records), 1)
+        rain_pct = round(100 * sum(r["is_rain"] for r in records) / len(records))
+
+        prompt = (
+            f"Summarize in one sentence: {len(predictions)} weather readings predict "
+            f"apparent temperature of {avg_temp}C. "
+            f"Humidity {avg_humidity}, wind {avg_wind}km/h, {rain_pct}% chance of rain."
+        )
+
+        resp = requests.post(
+            f"https://api-inference.huggingface.co/models/{HF_MODEL}",
+            headers={"Authorization": f"Bearer {HF_API_TOKEN}"},
+            json={"inputs": prompt, "parameters": {"max_new_tokens": 60}},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            result = resp.json()
+            if isinstance(result, list) and result:
+                text = result[0].get("generated_text", "").strip()
+                return text[:300]
+    except Exception as exc:
+        logger.warning("HuggingFace summary failed (non-blocking): %s", exc)
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# CSV -> predict request conversion
 # ---------------------------------------------------------------------------
 def _csv_to_records(csv_bytes: bytes) -> list[dict]:
     reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8")))
@@ -172,6 +209,11 @@ def main(msg: func.QueueMessage) -> None:
     predictions = api_result.get("predictions", [])
     model_version = api_result.get("model_version", "unknown")
 
+    # --- HuggingFace natural language summary (non-blocking) ---
+    hf_summary = _get_hf_summary(predictions, records)
+    if hf_summary:
+        logger.info("HF summary generated. blob=%s", blob_name)
+
     # --- Write result to output/ blob ---
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_name = f"{blob_name.rsplit('.', 1)[0]}_{timestamp}.json"
@@ -201,6 +243,7 @@ def main(msg: func.QueueMessage) -> None:
         "record_count": len(predictions),
         "latency_ms": latency_ms,
         "confidence_score": round(sum(predictions) / len(predictions), 4) if predictions else None,
+        "hf_summary": hf_summary,
     }
     _upsert_inference(cosmos_doc)
     logger.info("Cosmos DB upsert complete. id=%s", cosmos_doc["id"])

@@ -40,7 +40,7 @@ function ChartCard({
 }
 
 export default function App() {
-  const { data, status, error, lastSync, isFetching, refresh } = useInferences()
+  const { data, meta, status, error, lastSync, isFetching, refresh } = useInferences()
 
   const n          = data.length
   const isLoading  = status === 'loading'
@@ -73,7 +73,7 @@ export default function App() {
         {/* ── Stats ── */}
         <section>
           <SectionHeader>Overview</SectionHeader>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <StatCard
               index={1}
               value={isLoading ? '…' : n}
@@ -101,6 +101,13 @@ export default function App() {
               value={isLoading ? '…' : modelVer}
               label="Model version"
               delay={180}
+            />
+            <StatCard
+              index={5}
+              value={isLoading || !meta ? '…' : meta.read_latency_ms.toFixed(0)}
+              unit="ms"
+              label={`DB read · ${meta?.read_region ?? 'Cosmos DB'}`}
+              delay={240}
             />
           </div>
         </section>

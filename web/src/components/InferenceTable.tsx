@@ -55,7 +55,7 @@ export default function InferenceTable({ rows, isFetching, onRefresh }: Inferenc
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-white/[0.06]">
-              {["#", "File", "Timestamp", "Records", "Avg Temp", "Latency", "Model"].map((h) => (
+              {["#", "File", "Timestamp", "Records", "Avg Temp", "Latency", "Model", "AI Summary"].map((h) => (
                 <th
                   key={h}
                   className="px-4 py-3 text-left text-[10px] font-semibold tracking-widest
@@ -71,7 +71,7 @@ export default function InferenceTable({ rows, isFetching, onRefresh }: Inferenc
               Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-16 text-center text-zinc-600 text-xs">
+                <td colSpan={8} className="px-4 py-16 text-center text-zinc-600 text-xs">
                   No inferences yet — upload a CSV to the{" "}
                   <code className="font-mono bg-white/[0.05] px-1 rounded">input/</code> container to begin.
                 </td>
@@ -104,6 +104,11 @@ export default function InferenceTable({ rows, isFetching, onRefresh }: Inferenc
                   </td>
                   <td className="px-4 py-3">
                     <span className="badge badge-violet">{r.model_version}</span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500 max-w-[260px]">
+                    {r.hf_summary
+                      ? <span className="block truncate italic text-[11px]" title={r.hf_summary}>{r.hf_summary}</span>
+                      : <span className="text-zinc-700">—</span>}
                   </td>
                 </tr>
               ))
