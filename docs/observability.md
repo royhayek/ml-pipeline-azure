@@ -104,6 +104,32 @@ requests
 
 ---
 
+## A/B testing KQL queries (bonus)
+
+### Model version comparison - accuracy vs latency
+```kusto
+requests
+| where timestamp > ago(24h) and name has "predict"
+| extend model_ver = tostring(customDimensions["model_version"])
+| summarize
+    avg_latency_ms = avg(duration),
+    p95_latency_ms = percentile(duration, 95),
+    call_count     = count()
+  by model_ver
+| order by model_ver asc
+```
+
+### Traffic distribution between v1 and v2
+```kusto
+requests
+| where timestamp > ago(1h) and name has "predict"
+| extend model_ver = tostring(customDimensions["model_version"])
+| summarize count() by model_ver
+| render piechart
+```
+
+---
+
 ## Azure dashboard setup
 
 ```bash
