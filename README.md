@@ -109,6 +109,42 @@ Key GitHub Secrets required before running the CD workflow:
 | `ACR_LOGIN_SERVER` | e.g. `acrXXXXXX.azurecr.io` |
 | `ACR_NAME` | Registry name without domain |
 
+### Note on Static Web App deployment
+
+The React dashboard (`/web`) is built with Vite and is fully production-ready
+(`npm run build` produces a static `dist/` bundle that can be served by any
+static host). However, **Azure Static Web Apps could not be deployed in this
+project** because of two stacked restrictions:
+
+1. `Microsoft.Web/staticSites` is only available in 5 Azure regions worldwide:
+   `centralus`, `eastus2`, `westus2`, `westeurope`, `eastasia`.
+2. Our **Azure for Students subscription policy blocks all 5 of those regions**
+   (`RequestDisallowedByAzure` is returned for every create attempt).
+
+The dashboard is therefore documented and demonstrated locally. To run it
+against the live Azure backend:
+
+```bash
+cd web
+npm ci
+VITE_API_URL="https://func-mlpipeline-aa8229.azurewebsites.net" npm run dev
+# Open http://localhost:5173
+```
+
+The Vite dev server proxies `/api/recent` to the live Azure Function, so the
+dashboard shows real Cosmos DB data including HuggingFace summaries and the
+multi-region read latency. On a regular (non-Student) subscription, deployment
+to the actual Azure Static Web App resource is a single command:
+
+```bash
+az staticwebapp create \
+  --name swa-mlpipeline --resource-group rg-mlpipeline-prod \
+  --location westeurope --sku Free
+```
+
+See [`docs/deployment.md`](docs/deployment.md#8---bonus-frontend-on-static-web-app)
+for the full SWA deployment script.
+
 ---
 
 ## API reference
