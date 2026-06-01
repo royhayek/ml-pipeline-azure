@@ -1,4 +1,4 @@
-name: CD — Build, Push & Deploy
+name: CD - Build, Push & Deploy
 
 on:
   push:
@@ -19,17 +19,45 @@ env:
   RESOURCE_GROUP_PROD: rg-mlpipeline-prod
 
 jobs:
-  # ── Build & push image ────────────────────────────────────────────────────
-  build-and-push:
-    name: Build & push to ACR
+  # --- Always runs: verifies the Docker image can be built from source ----
+  build:
+    name: Build Docker image
     runs-on: ubuntu-latest
-    # Gate: only runs when DEPLOY_ENABLED repo variable is set to "true"
-    # (set this in Settings -> Secrets and variables -> Actions -> Variables
-    #  once AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME,
-    #  ACR_LOGIN_SERVER secrets are configured)
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
+      image_size: ${{ steps.meta.outputs.image_size }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t mlapi:${{ steps.meta.outputs.image_tag }} \
+            -t mlapi:latest \
+            -f api/Dockerfile \
+            .
+
+      - name: Report image size
+        id: size
+        run: |
+          SIZE=$(docker image inspect mlapi:latest --format='{{.Size}}' | numfmt --to=iec)
+          echo "image_size=$SIZE" >> $GITHUB_OUTPUT
+          echo "Built Docker image: mlapi:${{ steps.meta.outputs.image_tag }} (~$SIZE)"
+
+  # --- Real deploy: only runs when DEPLOY_ENABLED repo variable is "true" ---
+  # Set this in Settings -> Secrets and variables -> Actions -> Variables
+  # after configuring the AZURE_* secrets and ACR_* secrets at repo level.
+  push-to-acr:
+    name: Push image to ACR
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
 
     steps:
       - name: Checkout
@@ -45,26 +73,19 @@ jobs:
       - name: Log in to ACR
         run: az acr login --name ${{ secrets.ACR_NAME }}
 
-      - name: Set image tag
-        id: meta
-        run: |
-          TAG="${{ github.sha }}"
-          echo "image_tag=${TAG}" >> $GITHUB_OUTPUT
-
-      - name: Build and push Docker image
+      - name: Build, tag, and push
         run: |
           docker build \
-            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }} \
             -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest \
             -f api/Dockerfile \
             .
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
           docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
-  # ── Deploy to staging ─────────────────────────────────────────────────────
   deploy-staging:
     name: Deploy to staging
-    needs: build-and-push
+    needs: push-to-acr
     runs-on: ubuntu-latest
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: staging
@@ -85,7 +106,7 @@ jobs:
           az containerapp update \
             --name ca-mlapi-staging \
             --resource-group ${{ env.RESOURCE_GROUP_STAGING }} \
-            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
 
       - name: Deploy Functions (staging)
         run: |
@@ -102,10 +123,9 @@ jobs:
             --query properties.configuration.ingress.fqdn -o tsv)
           curl -sf "https://${STAGING_URL}/health" | grep '"status":"ok"'
 
-  # ── Deploy to prod (requires manual approval) ─────────────────────────────
   deploy-prod:
     name: Deploy to production
-    needs: [build-and-push, deploy-staging]
+    needs: [push-to-acr, deploy-staging]
     runs-on: ubuntu-latest
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: prod   # requires manual approval gate configured in GitHub
@@ -126,7 +146,7 @@ jobs:
           az containerapp update \
             --name ca-mlapi-prod \
             --resource-group ${{ env.RESOURCE_GROUP_PROD }} \
-            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}
+            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
 
       - name: Deploy Functions (prod)
         run: |
