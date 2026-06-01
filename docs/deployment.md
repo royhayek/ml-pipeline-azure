@@ -256,6 +256,95 @@ az staticwebapp create \
 
 ---
 
+## 9 - Bonus: API Management Consumption (+1)
+
+```bash
+# Create APIM Consumption (free up to 1M calls/month)
+az apim create \
+  --name apim-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --publisher-name "ML Pipeline Team" \
+  --publisher-email "royhayek27@gmail.com" \
+  --sku-name Consumption \
+  --location $LOCATION
+
+APIM_URL="https://apim-mlpipeline-aa8229.azure-api.net"
+
+# Import the ML API from its live OpenAPI spec
+az apim api import \
+  --service-name apim-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --path mlapi \
+  --specification-format OpenApiJson \
+  --specification-url "https://ca-mlapi.orangesky-cc1a99c3.switzerlandnorth.azurecontainerapps.io/openapi.json" \
+  --api-id mlapi \
+  --display-name "Weather ML API" \
+  --protocols https
+
+# Apply quota + rate-limit policy (docs/apim_policy.xml)
+az apim api policy create \
+  --service-name apim-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --api-id mlapi \
+  --value @docs/apim_policy.xml
+
+# Create a product and subscription
+az apim product create \
+  --service-name apim-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --product-id standard \
+  --product-name "Standard" \
+  --subscription-required true \
+  --approval-required false \
+  --state published
+
+az apim product api add \
+  --service-name apim-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --product-id standard \
+  --api-id mlapi
+
+# Get subscription key
+APIM_KEY=$(az apim subscription list \
+  --service-name apim-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --query "[0].primaryKey" -o tsv)
+
+# Test through APIM
+curl -H "Ocp-Apim-Subscription-Key: $APIM_KEY" \
+  "$APIM_URL/mlapi/health"
+
+# Update worker to use APIM endpoint
+az functionapp config appsettings set \
+  --name func-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --settings \
+    ML_API_URL="$APIM_URL/mlapi" \
+    APIM_SUBSCRIPTION_KEY="$APIM_KEY"
+```
+
+---
+
+## 10 - Bonus: Multi-region Cosmos DB (+0.5)
+
+```bash
+# Add northeurope as a read-only replica
+az cosmosdb update \
+  --name cosmos-mlpipeline \
+  --resource-group $RG \
+  --locations \
+    regionName=switzerlandnorth failoverPriority=0 isZoneRedundant=False \
+    regionName=northeurope      failoverPriority=1 isZoneRedundant=False
+
+# Update HTTP API function to prefer northeurope reads
+az functionapp config appsettings set \
+  --name func-mlpipeline-aa8229 \
+  --resource-group $RG \
+  --settings COSMOS_PREFERRED_REGION="North Europe"
+```
+
+---
+
 ## Teardown (end of session)
 
 ```bash

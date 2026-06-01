@@ -49,6 +49,13 @@ COSMOS_DB = os.environ.get("COSMOS_DATABASE", "mlpipeline")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER", "inferences")
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
 HF_MODEL = "google/flan-t5-base"
+# APIM subscription key - set when routing through API Management
+APIM_KEY = os.environ.get("APIM_SUBSCRIPTION_KEY", "")
+
+# Build ML API request headers (adds APIM key when configured)
+_ML_API_HEADERS = {"Content-Type": "application/json"}
+if APIM_KEY:
+    _ML_API_HEADERS["Ocp-Apim-Subscription-Key"] = APIM_KEY
 
 # ---------------------------------------------------------------------------
 # Custom Application Insights metrics (via opencensus when available)
@@ -193,6 +200,7 @@ def main(msg: func.QueueMessage) -> None:
         response = requests.post(
             f"{ML_API_URL}/predict",
             json={"records": records},
+            headers=_ML_API_HEADERS,
             timeout=30,
         )
         response.raise_for_status()
